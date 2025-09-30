@@ -1,4 +1,4 @@
-# Text-to-Workout Flask App
+# RoadForge Flask App
 
 ## Overview
 A minimalistic Flask web application that generates cycling workout files (.zwo, .mrc) with Free and Pro modes.

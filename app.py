@@ -199,7 +199,7 @@ def generate_zone_bars(workout):
 
 def generate_zwo(duration, focus, intensity):
     zwo = f'''<workout_file>
-    <author>Text-to-Workout</author>
+    <author>RoadForge</author>
     <name>{focus} - {duration} min</name>
     <description>Auto-generated {focus} workout</description>
     <sportType>bike</sportType>
