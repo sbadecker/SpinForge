@@ -2,12 +2,17 @@ from __future__ import annotations
 from .model import Workout, Step
 
 def sanitize_workout(w: Workout) -> Workout:
-    # Dauer min. 5s; pFTP clamp 0.50–3.00
     for s in w.steps:
+        # Dauer min. 5s
         if s.duration_s < 5:
             s.duration_s = 5
-        s.pct_ftp = max(0.50, min(3.00, float(s.pct_ftp)))
+        # Clamp 50–300 % FTP (Zwift-Workouts nutzen teils sehr hohe Sprints)
+        s.pct_ftp = float(s.pct_ftp)
+        if s.pct_ftp < 0.50: s.pct_ftp = 0.50
+        if s.pct_ftp > 3.00: s.pct_ftp = 3.00
         if s.pct_ftp_end is not None:
-            s.pct_ftp_end = max(0.50, min(3.00, float(s.pct_ftp_end)))
-    # keine künstliche Sprungbegrenzung zwischen Steps (Zwift erlaubt große Sprünge)
+            s.pct_ftp_end = float(s.pct_ftp_end)
+            if s.pct_ftp_end < 0.50: s.pct_ftp_end = 0.50
+            if s.pct_ftp_end > 3.00: s.pct_ftp_end = 3.00
+    # keine künstlichen Sprunglimits
     return w

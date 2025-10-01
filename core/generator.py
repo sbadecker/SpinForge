@@ -9,28 +9,18 @@ def build_time_box_workout(duration_min: int, focus: str, vary: bool=False, seed
         random.seed(seed)
 
     total = max(20*60, int(duration_min)*60)
-
-    # Warmup/Cooldown als echte Ramps
-    min_warmup_duration = 5
-    min_cooldown_duration = 5
-    warum_up_ratio = 0.12
-    cool_down_ration = 0.08
-    wu = max(5*60, int(warum_up_ratio*total))
-    cd = max(5*60, int(cool_down_ration*total))
+    wu = max(5*60, int(0.12*total))
+    cd = max(5*60, int(0.08*total))
     work = max(0, total - wu - cd)
 
     steps: list[Step] = []
-
-    # Warmup 60% → 75%
+    # Warmup: 60% -> ~75% (Ramp)
     wu_low = 0.60
     wu_high = 0.73 + randj(0.03) if vary else 0.75
     steps.append(Step(duration_s=wu, pct_ftp=round(wu_low,3), pct_ftp_end=round(wu_high,3), kind="warmup", note="Warmup"))
 
-    # Main nach Fokus
     f = focus.strip().lower()
-    # ToDo: vary should change the duration and intensity of all steps in repeated intervals, not each step individually
     if f == "endurance":
-        # leichte wellenförmige Ramp im Main-Teil (optional)
         if vary and work >= 10*60:
             half = work // 2
             steps.append(Step(half, 0.65, 0.72, kind="ramp", note="Endurance ramp up"))
@@ -44,13 +34,12 @@ def build_time_box_workout(duration_min: int, focus: str, vary: bool=False, seed
     else:  # VO2
         steps += repeat_intervals(work, 2*60, 4*60, (1.10,1.18), 2*60, 4*60, vary)
 
-    # Cooldown 60% → 50%
+    # Cooldown: 60% -> 50% (Ramp)
     steps.append(Step(duration_s=cd, pct_ftp=0.60, pct_ftp_end=0.50, kind="cooldown", note="Cooldown"))
 
-    # leichte Guardrails
     snap_total(steps, total)
-    clamp_pct(steps, 0.50, 3.00)  # Zwift erlaubt sehr hohe Sprints; 3.00 (=300%) als sinnvolle Obergrenze
-    ensure_min_duration(steps, 5) # 5s Minimum, Zwift-Realität
+    clamp_pct(steps, 0.50, 3.00)   # Zwift toleriert sehr hohe Sprints
+    ensure_min_duration(steps, 5)  # Zwift: 5s möglich (UI oft 10s, File 5s ok)
 
     return Workout(name=f"{focus} {duration_min}m", focus=focus, steps=steps)
 
@@ -73,7 +62,7 @@ def repeat_intervals(total_s:int, w_lo:int, w_hi:int, w_pct:tuple[float,float], 
 def pick_int(lo:int, hi:int, vary:bool)->int:
     if not vary or lo==hi: return lo
     v = random.randint(lo, hi)
-    return (v//5)*5  # auf 5s runden (Zwift kann 5s)
+    return max(5, (v//5)*5)  # 5s Raster
 
 def pick_pct(lo:float, hi:float, vary:bool)->float:
     if not vary or math.isclose(lo, hi): return round((lo+hi)/2,3)
