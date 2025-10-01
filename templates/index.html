@@ -8,23 +8,25 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-900">
-  <div class="max-w-3xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-1">Individuelle Rad-Workouts in Sekunden – sofort fahrbar in Zwift &amp; Co.</h1>
-    <p class="text-slate-600 mb-6">Dauer & Fokus wählen → Generate → Download als .zwo oder .mrc.</p>
+  <div class="max-w-4xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-1">Individuelle Rad-Workouts in Sekunden – sofort fahrbar in Zwift</h1>
+    <p class="text-slate-600 mb-6">Dauer & Fokus wählen → Generate → Download als .zwo</p>
 
+    <!-- Form -->
     <form class="flex flex-wrap gap-3 items-end"
           hx-post="/preview" hx-trigger="submit"
-          hx-target="#preview" hx-swap="innerHTML">
+          hx-target="#preview" hx-swap="none" id="wf" novalidate>
+      <div id="form-errors" class="w-full text-red-600 text-sm hidden"></div>
       <label class="block">
         <span class="text-sm">Dauer (Min)</span>
-        <select name="duration_min" class="px-3 py-2 border rounded">
+        <select name="duration_min" class="px-3 py-2 border rounded" required>
           <option>30</option><option selected>45</option><option>60</option><option>75</option><option>90</option>
         </select>
       </label>
 
       <label class="block">
         <span class="text-sm">Fokus</span>
-        <select name="focus" class="px-3 py-2 border rounded">
+        <select name="focus" class="px-3 py-2 border rounded" required>
           <option>Endurance</option>
           <option>SweetSpot</option>
           <option>Threshold</option>
@@ -36,68 +38,280 @@
         <input type="checkbox" name="vary" class="w-4 h-4">
         <span class="text-sm">Variante</span>
       </label>
-
-      <button class="px-4 py-2 bg-blue-600 text-white rounded">Workout erstellen</button>
+      <button id="btn-submit" class="px-4 py-2 bg-blue-600 text-white rounded">Workout erstellen</button>
     </form>
 
+    <!-- Actions (Download etc.) -->
     <div class="mt-4 flex gap-3">
-      <a id="btn-zwo" href="#" class="px-3 py-2 bg-slate-900 text-white rounded">Download .zwo</a>
-      <a id="btn-mrc" href="#" class="px-3 py-2 bg-slate-700 text-white rounded">Download .mrc</a>
+      <a id="btn-zwo" href="#" class="px-3 py-2 bg-slate-900 text-white rounded pointer-events-none opacity-50">Download .zwo</a>
+      <button id="btn-regenerate" class="px-3 py-2 border rounded hidden">Neu generieren</button>
     </div>
 
-    <div id="preview" class="mt-6 text-sm text-slate-800"></div>
+    <!-- Preview -->
+    <div id="preview" class="mt-6 text-sm text-slate-800">
+      <div class="text-slate-500">Noch kein Workout generiert.</div>
+    </div>
   </div>
 
   <script>
-    function buildDownloadUrls() {
+    // -----------------------
+    // Helper & Zone-Farben
+    // -----------------------
+    function zoneColor(p) {
+      if (p < 0.70) return '#22c55e';        // Recovery
+      if (p < 0.88) return '#84cc16';        // Tempo
+      if (p < 0.95) return '#f59e0b';        // SweetSpot
+      if (p < 1.05) return '#fb923c';        // Threshold
+      if (p < 1.20) return '#ef4444';        // VO2
+      return '#a855f7';                       // Anaerob/Sprint
+    }
+    const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x || 0));
+    const fmtPct = p => `${Math.round(p*100)}%`;
+    const fmtMinSec = s => {
+      s = Math.round(s);
+      const m = Math.floor(s/60), r = s%60;
+      return r ? `${m}m ${r}s` : `${m}m`;
+    };
+
+    // Ramps als Sub-Steps splitten, damit sie schräg wirken
+    function splitRamp(step, slices=24) {
+      const out = [];
+      const a = step.pct_ftp, b = (step.pct_ftp_end ?? step.pct_ftp);
+      const T = step.duration_s;
+      const dt = Math.max(1, Math.round(T / slices));
+      let t = 0;
+      while (t < T) {
+        const t1 = Math.min(T, t + dt);
+        const ratio0 = t / T;
+        const ratio1 = t1 / T;
+        const p0 = a + (b - a) * ratio0;
+        const p1 = a + (b - a) * ratio1;
+        const pm = (p0 + p1) / 2;
+        out.push({ duration_s: (t1 - t), pct_ftp: pm, kind: 'steady', note: step.note });
+        t = t1;
+      }
+      return out;
+    }
+
+    // Download-URL nur für ZWO (Zwift-only)
+    function buildDownloadUrl() {
       const duration = document.querySelector('select[name="duration_min"]').value;
       const focus = document.querySelector('select[name="focus"]').value;
       const vary = document.querySelector('input[name="vary"]').checked ? '1' : '0';
-      return {
-        zwo: `/download?fmt=zwo&duration_min=${duration}&focus=${encodeURIComponent(focus)}&vary=${vary}`,
-        mrc: `/download?fmt=mrc&duration_min=${duration}&focus=${encodeURIComponent(focus)}&vary=${vary}`
-      };
+      return `/download?duration_min=${duration}&focus=${encodeURIComponent(focus)}&vary=${vary}`;
     }
 
-    function updateDownloadLinks() {
-      const urls = buildDownloadUrls();
-      const z = document.getElementById('btn-zwo');
-      const m = document.getElementById('btn-mrc');
-      if (z) z.href = urls.zwo;
-      if (m) m.href = urls.mrc;
+    function enableDownload() {
+      const a = document.getElementById('btn-zwo');
+      a.href = buildDownloadUrl();
+      a.classList.remove('opacity-50','pointer-events-none');
+      const reg = document.getElementById('btn-regenerate');
+      reg.classList.remove('hidden');
+      reg.onclick = () => document.getElementById('wf').dispatchEvent(new Event('submit',{cancelable:true}));
     }
 
-    document.addEventListener('DOMContentLoaded', updateDownloadLinks);
-    document.querySelector('form').addEventListener('change', updateDownloadLinks);
-    document.querySelector('form').addEventListener('input', updateDownloadLinks);
+    // -----------------------
+    // Form Validation (Client)
+    // -----------------------
+    const form = document.getElementById('wf');
+    const errorsEl = document.getElementById('form-errors');
+    const submitBtn = document.getElementById('btn-submit');
+    const downloadBtn = document.getElementById('btn-zwo');
 
+    const allowedFocus = new Set(['Endurance','SweetSpot','Threshold','VO2']);
+
+    function setFieldError(el, on) {
+      if (!el) return;
+      if (on) {
+        el.classList.add('border-red-500','ring-1','ring-red-300');
+      } else {
+        el.classList.remove('border-red-500','ring-1','ring-red-300');
+      }
+    }
+
+    function showErrors(messages) {
+      if (!messages || !messages.length) { clearErrors(); return; }
+      errorsEl.textContent = messages.join(' · ');
+      errorsEl.classList.remove('hidden');
+    }
+
+    function clearErrors() {
+      errorsEl.textContent = '';
+      errorsEl.classList.add('hidden');
+      setFieldError(form.querySelector('select[name="duration_min"]'), false);
+      setFieldError(form.querySelector('select[name="focus"]'), false);
+    }
+
+    function validateForm() {
+      const messages = [];
+      const durationEl = form.querySelector('select[name="duration_min"]');
+      const focusEl = form.querySelector('select[name="focus"]');
+      const duration = parseInt(durationEl?.value || '0', 10);
+      const focus = (focusEl?.value || '').trim();
+
+      let ok = true;
+      if (!Number.isFinite(duration) || duration < 20) {
+        ok = false; messages.push('Dauer muss mindestens 20 Minuten sein');
+        setFieldError(durationEl, true);
+      } else {
+        setFieldError(durationEl, false);
+      }
+      if (!allowedFocus.has(focus)) {
+        ok = false; messages.push('Ungültiger Fokus ausgewählt');
+        setFieldError(focusEl, true);
+      } else {
+        setFieldError(focusEl, false);
+      }
+      return { ok, messages };
+    }
+
+    form.addEventListener('submit', (e) => {
+      const { ok, messages } = validateForm();
+      if (!ok) {
+        e.preventDefault();
+        showErrors(messages);
+        // keep download disabled until valid render
+        downloadBtn.classList.add('opacity-50','pointer-events-none');
+      } else {
+        clearErrors();
+      }
+    });
+
+    form.addEventListener('change', () => {
+      // re-validate on any change
+      const { ok, messages } = validateForm();
+      if (ok) clearErrors(); else showErrors(messages);
+    });
+
+    // Disable submit during request & surface HTMX errors
+    document.body.addEventListener('htmx:beforeRequest', (e) => {
+      if (e.detail.elt === form) {
+        submitBtn.setAttribute('disabled','');
+        submitBtn.classList.add('opacity-50','cursor-not-allowed');
+      }
+    });
     document.body.addEventListener('htmx:afterRequest', (e) => {
-      if (e.detail.path !== '/preview') return;
-      const data = e.detail.xhr.response ? JSON.parse(e.detail.xhr.response) : null;
-      if (!data) return;
-      const total = data.steps.reduce((s,x)=>s+x.d,0);
+      if (e.detail.elt === form) {
+        submitBtn.removeAttribute('disabled');
+        submitBtn.classList.remove('opacity-50','cursor-not-allowed');
+        clearErrors();
+      }
+    });
+    document.body.addEventListener('htmx:responseError', (e) => {
+      if (e.detail.elt === form) {
+        showErrors(['Serverfehler beim Generieren des Workouts']);
+        submitBtn.removeAttribute('disabled');
+        submitBtn.classList.remove('opacity-50','cursor-not-allowed');
+      }
+    });
 
-      let bars = '<div class="flex h-20 rounded overflow-hidden ring-1 ring-slate-200">';
-      data.steps.forEach(s=>{
-        const w = (s.d/total*100).toFixed(2)+'%';
-        const pct = s.pct;
-        const color = pct>=1.10 ? 'bg-red-400'
-                    : pct>=0.95 ? 'bg-orange-400'
-                    : pct>=0.88 ? 'bg-amber-400'
-                    : pct>=0.70 ? 'bg-lime-400'
-                    : 'bg-green-400';
-        bars += `<div class="${color}" style="width:${w}" title="${Math.round(pct*100)}% · ${s.d}s ${s.note||''}"></div>`;
-      });
-      bars += '</div>';
+    // -----------------------
+    // Chart Rendering (SVG)
+    // -----------------------
+    function drawWorkoutChart(data) {
+      const total = data.steps.reduce((s,x)=>s + x.d, 0);
+      const W = 960;      // Zeichenfläche
+      const Hmax = 140;   // Balkenhöhe (oben)
+      const Hmin = 30;    // Mindesthöhe (damit leichte Bereiche sichtbar sind)
+      const H = Hmax + 30;  // + Achse
+
+      // 1) Ramps auflösen
+      const flatSteps = [];
+    for (const s of data.steps) {
+      const dur = s.d ?? s.duration_s;         // fallback
+      const a = s.pct ?? s.pct_ftp ?? 0.6;
+      const b = (s.pct_end ?? s.pct_ftp_end ?? a);
+      const kind = s.kind || 'steady';
+      const note = s.note || '';
+      if ((kind === 'warmup' || kind === 'cooldown') && b != null && Math.abs(b - a) > 1e-6) {
+        flatSteps.push(...splitRamp({duration_s:dur, pct_ftp:a, pct_ftp_end:b, note}, 28));
+      } else {
+        flatSteps.push({ duration_s: dur, pct_ftp: a, kind, note });
+      }
+    }
+
+      // 2) SVG Start + Achsen/Gitter
+      const svg = [];
+      svg.push(`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto bg-white rounded ring-1 ring-slate-200">`);
+
+      // horizontale Zonenlinien (70/88/95/105/120%)
+      const thresholds = [0.70,0.88,0.95,1.05,1.20];
+      for (const thr of thresholds) {
+        const h = Hmin + (Hmax - Hmin) * Math.min(thr, 1.4) / 1.4;
+        const y = Hmax - h;
+        svg.push(`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#e5e7eb" stroke-dasharray="4 4" stroke-width="1"/>`);
+      }
+      // Zeitlinien alle 5 Minuten
+      const totalMin = Math.max(1, Math.round(total/60));
+      const gridStep = (totalMin <= 45) ? 5 : 10;
+      for (let m = gridStep; m < totalMin; m += gridStep) {
+        const x = (m*60 / total) * W;
+        svg.push(`<line x1="${x}" y1="0" x2="${x}" y2="${Hmax}" stroke="#eef2ff" stroke-width="1"/>`);
+        svg.push(`<text x="${x+2}" y="${Hmax+14}" font-size="10" fill="#64748b">${m}m</text>`);
+      }
+      // Grundlinie unten
+      svg.push(`<line x1="0" y1="${Hmax}" x2="${W}" y2="${Hmax}" stroke="#e5e7eb" stroke-width="1"/>`);
+
+      // 3) Balken
+      let x = 0;
+      for (const s of flatSteps) {
+        const w = (s.duration_s / total) * W;
+        const p = clamp(s.pct_ftp, 0.5, 3.0);
+        const h = Hmin + (Hmax - Hmin) * Math.min(p, 1.4) / 1.4;
+        const y = Hmax - h;
+        const color = zoneColor(p);
+        const title = `${fmtPct(p)} · ${fmtMinSec(s.duration_s)}${s.note?(' · '+s.note):''}`;
+        svg.push(
+          `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}">
+             <title>${title}</title>
+           </rect>`
+        );
+        x += w;
+      }
+
+      svg.push(`</svg>`);
+
+      // 4) DOM schreiben
+      const chartHtml = svg.join('');
+      const summaryHtml = `Name: <b>${data.name}</b> · IF <b>${data.if}</b> · TSS <b>${data.tss}</b> · Dauer <b>${fmtMinSec(total)}</b>`;
+      const legendHtml = `
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+          <div class="flex items-center gap-2"><span class="w-3 h-3 inline-block rounded" style="background:#22c55e"></span>Recovery <70%</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 inline-block rounded" style="background:#84cc16"></span>Tempo 70–88%</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 inline-block rounded" style="background:#f59e0b"></span>SweetSpot 88–95%</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 inline-block rounded" style="background:#fb923c"></span>Threshold 95–105%</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 inline-block rounded" style="background:#ef4444"></span>VO₂ 105–120%</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 inline-block rounded" style="background:#a855f7"></span>Anaerob >120%</div>
+        </div>`;
 
       document.getElementById('preview').innerHTML = `
         <div class="space-y-3">
-          ${bars}
-          <div>Name: <b>${data.name}</b> · IF <b>${data.if}</b> · TSS <b>${data.tss}</b></div>
+          <div id="chart">${chartHtml}</div>
+          <div id="summary" class="text-slate-700">${summaryHtml}</div>
+          <div id="legend" class="mt-2">${legendHtml}</div>
         </div>`;
+    }
 
-      updateDownloadLinks();
+    // -----------------------
+    // HTMX Hooks (cancel swap + render chart)
+    // -----------------------
+    document.body.addEventListener('htmx:beforeSwap', (e) => {
+      // cancel DOM swap for the preview form; we'll render manually
+      if (e.detail.elt === form) {
+        e.detail.shouldSwap = false;
+        e.detail.isError = false;
+      }
     });
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      if (e.detail.elt !== form) return;
+      const resp = e.detail.xhr && e.detail.xhr.response ? e.detail.xhr.response : null;
+      const data = resp ? JSON.parse(resp) : null;
+      if (!data) return;
+      drawWorkoutChart(data);
+      enableDownload();
+    });
+
+    // beim Laden: Download-Button deaktiviert lassen, bis ein Workout gerendert wurde
   </script>
 </body>
 </html>
