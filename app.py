@@ -16,15 +16,7 @@ def preview():
     vary = request.form.get("vary") == "on"
     w = build_time_box_workout(duration, focus, vary=vary)
     IF, TSS = compute_if_tss(w)
-    steps = []
-    for s in w.steps:
-        steps.append({
-            "d": s.duration_s,
-            "kind": s.kind,
-            "pct": s.pct_ftp,
-            "pct_end": s.pct_ftp_end,
-            "note": s.note
-        })
+    steps = [{"d": s.duration_s, "kind": s.kind, "pct": s.pct_ftp, "pct_end": s.pct_ftp_end, "note": s.note} for s in w.steps]
     return jsonify({"name": w.name, "focus": w.focus, "if": IF, "tss": TSS, "steps": steps})
 
 @app.get("/download")
@@ -33,9 +25,8 @@ def download():
     focus = request.args.get("focus", "VO2")
     vary = request.args.get("vary") == "1"
     w = build_time_box_workout(duration, focus, vary=vary)
-
     data = export_zwo(w)
-    fname = f'{w.name.replace(" ", "_")}.zwo'
+    fname = f'{w.name.replace(" ","_")}.zwo'
     return Response(data, mimetype="application/xml",
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 

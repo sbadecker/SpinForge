@@ -12,12 +12,13 @@ SYSTEM = """Du erzeugst Zwift-Workouts als JSON:
  "name": "string",
  "focus": "Endurance|SweetSpot|Threshold|VO2",
  "steps": [
-   {"duration_s": int, "pct_ftp": float, "kind":"steady|ramp|warmup|cooldown", "pct_ftp_end": float?, "note": str?}
+   {"duration_s": int, "pct_ftp": float, "kind":"steady|warmup|cooldown", "pct_ftp_end": float?, "note": str?}
  ]
 }
 Regeln:
+- Ramps NUR in warmup/cooldown (dann pct_ftp_end setzen). Main-Steps sind steady (ohne pct_ftp_end).
 - Min. 5s je Step
-- Intensitäten typ. 0.50–1.20 (Sprints >1.2 ok), Warmup/Cooldown als Ramp
+- Intensitäten typ. 0.50–1.20 (Sprints >1.2 ok); akzeptiere bis 3.00
 - Gesamtzeit ≈ {duration_min} min (±60s)
 Nur JSON, keine Erklärungen.
 """
@@ -29,8 +30,7 @@ USER = """Parameter:
 def _json_only(s: str) -> Dict[str, Any]:
     s = s.strip()
     if s.startswith("```"):
-        s = s.strip("`")
-        s = s.replace("json", "", 1).strip()
+        s = s.strip("`").replace("json","",1).strip()
     first, last = s.find("{"), s.rfind("}")
     if first >= 0 and last > first:
         s = s[first:last+1]
@@ -47,10 +47,9 @@ class NLParser:
         try:
             j = _json_only(raw.content)
         except Exception:
-            # Retry 1x
             raw = self.llm.invoke(msg)
             j = _json_only(raw.content)
-        # Parse in dataclasses
+
         steps = []
         for s in j.get("steps", []):
             steps.append(Step(
