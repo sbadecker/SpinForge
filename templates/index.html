@@ -1,116 +1,103 @@
-{% extends "base.html" %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>RoadForge – Workouts in Sekunden</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-3xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-1">Individuelle Rad-Workouts in Sekunden – sofort fahrbar in Zwift &amp; Co.</h1>
+    <p class="text-slate-600 mb-6">Dauer & Fokus wählen → Generate → Download als .zwo oder .mrc.</p>
 
-{% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-xl font-semibold text-gray-900">Free Mode</h2>
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                    Kostenlos
-                </span>
-            </div>
-            
-            <form hx-post="/preview" hx-target="#workout-preview" hx-swap="innerHTML">
-                <input type="hidden" name="mode" value="free">
-                
-                <div class="space-y-4">
-                    <div>
-                        <label for="duration" class="block text-sm font-medium text-gray-700 mb-2">
-                            Dauer (Minuten)
-                        </label>
-                        <select 
-                            id="duration" 
-                            name="duration"
-                            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                            <option value="30">30 Minuten</option>
-                            <option value="45">45 Minuten</option>
-                            <option value="60" selected>60 Minuten</option>
-                            <option value="75">75 Minuten</option>
-                            <option value="90">90 Minuten</option>
-                        </select>
-                    </div>
+    <form class="flex flex-wrap gap-3 items-end"
+          hx-post="/preview" hx-trigger="submit"
+          hx-target="#preview" hx-swap="innerHTML">
+      <label class="block">
+        <span class="text-sm">Dauer (Min)</span>
+        <select name="duration_min" class="px-3 py-2 border rounded">
+          <option>30</option><option selected>45</option><option>60</option><option>75</option><option>90</option>
+        </select>
+      </label>
 
-                    <div>
-                        <label for="focus" class="block text-sm font-medium text-gray-700 mb-2">
-                            Trainings-Fokus
-                        </label>
-                        <select 
-                            id="focus" 
-                            name="focus"
-                            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                            <option value="Endurance">Endurance</option>
-                            <option value="SweetSpot">Sweet Spot</option>
-                            <option value="Threshold">Threshold</option>
-                            <option value="VO2">VO2 Max</option>
-                        </select>
-                    </div>
+      <label class="block">
+        <span class="text-sm">Fokus</span>
+        <select name="focus" class="px-3 py-2 border rounded">
+          <option>Endurance</option>
+          <option>SweetSpot</option>
+          <option>Threshold</option>
+          <option selected>VO2</option>
+        </select>
+      </label>
 
-                    <div class="flex gap-3 pt-2">
-                        <button 
-                            type="submit"
-                            class="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                            Workout erstellen
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="vary" class="w-4 h-4">
+        <span class="text-sm">Variante</span>
+      </label>
 
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 {% if not is_pro %}opacity-75{% endif %}">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-xl font-semibold text-gray-900">Pro Mode</h2>
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                    Pro
-                </span>
-            </div>
+      <button class="px-4 py-2 bg-blue-600 text-white rounded">Workout erstellen</button>
+    </form>
 
-            {% if is_pro %}
-            <form hx-post="/preview" hx-target="#workout-preview" hx-swap="innerHTML">
-                <input type="hidden" name="mode" value="pro">
-                
-                <div class="space-y-4">
-                    <div>
-                        <label for="custom_text" class="block text-sm font-medium text-gray-700 mb-2">
-                            Workout beschreiben
-                        </label>
-                        <textarea 
-                            id="custom_text" 
-                            name="custom_text"
-                            rows="6"
-                            placeholder="z.B. 'Ein 60-minütiges Sweet Spot Workout mit 3x10min Intervallen bei 88% FTP und 5min Erholung dazwischen...'"
-                            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></textarea>
-                    </div>
-
-                    <button 
-                        type="submit"
-                        class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        Übernehmen (Pro)
-                    </button>
-                </div>
-            </form>
-            {% else %}
-            <div class="text-center py-8">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                <h3 class="mt-2 text-sm font-medium text-gray-900">Pro-Feature</h3>
-                <p class="mt-1 text-sm text-gray-500">
-                    Beschreibe dein Workout in natürlicher Sprache und lass es automatisch generieren.
-                </p>
-                <div class="mt-6">
-                    <button 
-                        onclick="checkoutPro()"
-                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                        Jetzt upgraden
-                    </button>
-                </div>
-            </div>
-            {% endif %}
-        </div>
+    <div class="mt-4 flex gap-3">
+      <a id="btn-zwo" href="#" class="px-3 py-2 bg-slate-900 text-white rounded">Download .zwo</a>
+      <a id="btn-mrc" href="#" class="px-3 py-2 bg-slate-700 text-white rounded">Download .mrc</a>
     </div>
 
-    <div id="workout-preview" class="mt-8">
-    </div>
-</div>
-{% endblock %}
+    <div id="preview" class="mt-6 text-sm text-slate-800"></div>
+  </div>
+
+  <script>
+    function buildDownloadUrls() {
+      const duration = document.querySelector('select[name="duration_min"]').value;
+      const focus = document.querySelector('select[name="focus"]').value;
+      const vary = document.querySelector('input[name="vary"]').checked ? '1' : '0';
+      return {
+        zwo: `/download?fmt=zwo&duration_min=${duration}&focus=${encodeURIComponent(focus)}&vary=${vary}`,
+        mrc: `/download?fmt=mrc&duration_min=${duration}&focus=${encodeURIComponent(focus)}&vary=${vary}`
+      };
+    }
+
+    function updateDownloadLinks() {
+      const urls = buildDownloadUrls();
+      const z = document.getElementById('btn-zwo');
+      const m = document.getElementById('btn-mrc');
+      if (z) z.href = urls.zwo;
+      if (m) m.href = urls.mrc;
+    }
+
+    document.addEventListener('DOMContentLoaded', updateDownloadLinks);
+    document.querySelector('form').addEventListener('change', updateDownloadLinks);
+    document.querySelector('form').addEventListener('input', updateDownloadLinks);
+
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      if (e.detail.path !== '/preview') return;
+      const data = e.detail.xhr.response ? JSON.parse(e.detail.xhr.response) : null;
+      if (!data) return;
+      const total = data.steps.reduce((s,x)=>s+x.d,0);
+
+      let bars = '<div class="flex h-20 rounded overflow-hidden ring-1 ring-slate-200">';
+      data.steps.forEach(s=>{
+        const w = (s.d/total*100).toFixed(2)+'%';
+        const pct = s.pct;
+        const color = pct>=1.10 ? 'bg-red-400'
+                    : pct>=0.95 ? 'bg-orange-400'
+                    : pct>=0.88 ? 'bg-amber-400'
+                    : pct>=0.70 ? 'bg-lime-400'
+                    : 'bg-green-400';
+        bars += `<div class="${color}" style="width:${w}" title="${Math.round(pct*100)}% · ${s.d}s ${s.note||''}"></div>`;
+      });
+      bars += '</div>';
+
+      document.getElementById('preview').innerHTML = `
+        <div class="space-y-3">
+          ${bars}
+          <div>Name: <b>${data.name}</b> · IF <b>${data.if}</b> · TSS <b>${data.tss}</b></div>
+        </div>`;
+
+      updateDownloadLinks();
+    });
+  </script>
+</body>
+</html>
