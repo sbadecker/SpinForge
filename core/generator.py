@@ -4,13 +4,13 @@ from .model import Workout, Step
 
 def build_time_box_workout(duration_min: int, focus: str, vary: bool=False, seed: int|None=None) -> Workout:
     if duration_min < 20:
-        raise ValueError("duration_min muss >= 20 sein.")
+        raise ValueError("duration_min must be >= 20.")
     if seed is not None:
         random.seed(seed)
 
     total = max(20*60, int(duration_min)*60)
 
-    # Warmup/Cooldown als Ramp
+    # Warmup/Cooldown as ramp
     wu = max(5*60, int(0.12*total))
     cd = max(5*60, int(0.08*total))
     work = max(0, total - wu - cd)
@@ -22,7 +22,7 @@ def build_time_box_workout(duration_min: int, focus: str, vary: bool=False, seed
     wu_high = 0.73 + randj(0.03) if vary else 0.75
     steps.append(Step(duration_s=wu, pct_ftp=round(wu_low,3), pct_ftp_end=round(wu_high,3), kind="warmup", note="Warmup"))
 
-    # Main nach Fokus
+    # Main by focus
     f = focus.strip().lower()
     if f == "endurance":
         # immer steady, keine Ramp im Main
@@ -32,16 +32,19 @@ def build_time_box_workout(duration_min: int, focus: str, vary: bool=False, seed
         steps += repeat_intervals(work, 8*60, 12*60, (0.88,0.94), 2*60, 4*60, vary)
     elif f == "threshold":
         steps += repeat_intervals(work, 12*60, 20*60, (0.95,1.02), 3*60, 5*60, vary)
+    elif f == "recovery":
+        p = 0.55 if not vary else pick_pct(0.50, 0.60, True)
+        steps.append(Step(work, p, kind="steady", note="Easy aerobic spin"))
     else:  # VO2
         steps += repeat_intervals(work, 2*60, 4*60, (1.10,1.18), 2*60, 4*60, vary)
 
     # Cooldown 60% -> 50%
     steps.append(Step(duration_s=cd, pct_ftp=0.60, pct_ftp_end=0.50, kind="cooldown", note="Cooldown"))
 
-    # Guardrails (Zwift-realistisch)
-    snap_total(steps, total)         # ±60s auf Zielzeit snappen
-    clamp_pct(steps, 0.50, 3.00)     # bis 300% FTP zulassen
-    ensure_min_duration(steps, 5)    # 5s Minimum (ZWO kann das)
+    # Guardrails (Zwift-realistic)
+    snap_total(steps, total)         # snap last step within ±60s to hit target time
+    clamp_pct(steps, 0.50, 3.00)     # allow up to 300% FTP
+    ensure_min_duration(steps, 5)    # ZWO supports 5s minimum
 
     return Workout(name=f"{focus} {duration_min}m", focus=focus, steps=steps)
 

@@ -15,5 +15,6 @@ class Step:
 @dataclass
 class Workout:
     name: str
-    focus: str              # "Endurance"|"SweetSpot"|"Threshold"|"VO2"
+    focus: str              # "Recovery"|"Endurance"|"SweetSpot"|"Threshold"|"VO2"
     steps: List[Step]
+    description: Optional[str] = None

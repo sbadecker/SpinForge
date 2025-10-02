@@ -9,24 +9,38 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
   <div class="max-w-4xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-1">Individuelle Rad-Workouts in Sekunden – sofort fahrbar in Zwift</h1>
-    <p class="text-slate-600 mb-6">Dauer & Fokus wählen → Generate → Download als .zwo</p>
+    <h1 class="text-2xl font-bold mb-1">Custom Cycling Workouts in Seconds – Ready for Zwift</h1>
+    <p class="text-slate-600 mb-6">Choose duration & focus → Generate → Download as .zwo</p>
 
     <!-- Form -->
     <form class="flex flex-wrap gap-3 items-end"
           hx-post="/preview" hx-trigger="submit"
           hx-target="#preview" hx-swap="none" id="wf" novalidate>
       <div id="form-errors" class="w-full text-red-600 text-sm hidden"></div>
+
+      <!-- Mode toggle -->
+      <fieldset id="mode-form" class="flex items-center gap-2 w-full">
+        <span class="text-sm text-slate-600 mr-2">Mode</span>
+        <label class="inline-flex items-center gap-1 text-sm">
+          <input type="radio" name="mode" value="form" class="w-4 h-4">
+          Structured
+        </label>
+        <label class="inline-flex items-center gap-1 text-sm">
+          <input type="radio" name="mode" value="nl" class="w-4 h-4" checked>
+          Natural language
+        </label>
+      </fieldset>
       <label class="block">
-        <span class="text-sm">Dauer (Min)</span>
+        <span class="text-sm">Duration (min)</span>
         <select name="duration_min" class="px-3 py-2 border rounded" required>
           <option>30</option><option selected>45</option><option>60</option><option>75</option><option>90</option>
         </select>
       </label>
 
       <label class="block">
-        <span class="text-sm">Fokus</span>
+        <span class="text-sm">Focus</span>
         <select name="focus" class="px-3 py-2 border rounded" required>
+          <option>Recovery</option>
           <option>Endurance</option>
           <option>SweetSpot</option>
           <option>Threshold</option>
@@ -34,22 +48,28 @@
         </select>
       </label>
 
-      <label class="inline-flex items-center gap-2">
+      <label id="row-vary" class="inline-flex items-center gap-2">
         <input type="checkbox" name="vary" class="w-4 h-4">
-        <span class="text-sm">Variante</span>
+        <span class="text-sm">Variation</span>
       </label>
-      <button id="btn-submit" class="px-4 py-2 bg-blue-600 text-white rounded">Workout erstellen</button>
+
+      <!-- NL preferences -->
+      <label id="row-prefs" class="block w-full hidden">
+        <span class="text-sm">Preferences (free text)</span>
+        <textarea name="prefs" rows="3" class="w-full px-3 py-2 border rounded" placeholder="e.g., 3x8min @ Z4 with 4min Z2 recoveries; include 10min warmup & cooldown"></textarea>
+      </label>
+      <button id="btn-submit" class="px-4 py-2 bg-blue-600 text-white rounded">Generate workout</button>
     </form>
 
     <!-- Actions (Download etc.) -->
     <div class="mt-4 flex gap-3">
       <a id="btn-zwo" href="#" class="px-3 py-2 bg-slate-900 text-white rounded pointer-events-none opacity-50">Download .zwo</a>
-      <button id="btn-regenerate" class="px-3 py-2 border rounded hidden">Neu generieren</button>
+      <button id="btn-regenerate" class="px-3 py-2 border rounded hidden">Regenerate</button>
     </div>
 
     <!-- Preview -->
     <div id="preview" class="mt-6 text-sm text-slate-800">
-      <div class="text-slate-500">Noch kein Workout generiert.</div>
+      <div class="text-slate-500">No workout generated yet.</div>
     </div>
   </div>
 
@@ -63,7 +83,7 @@
       { label: 'Z3', min: 0.75, max: 0.90, color: '#22c55e' },    // Green
       { label: 'Z4', min: 0.90, max: 1.05, color: '#f59e0b' },    // Yellow
       { label: 'Z5', min: 1.05, max: 1.20, color: '#f97316' },    // Orange
-      { label: 'Z6', min: 1.20, max: 1.50, color: '#ef4444' },    // Red
+      { label: 'Z6', min: 1.20, max: Infinity, color: '#ef4444' },    // Red (open-ended)
     ];
     function zoneFor(p) {
       const x = Math.max(0, p || 0);
@@ -103,11 +123,21 @@
     }
 
     // Download-URL nur für ZWO (Zwift-only)
+    function isNLMode() {
+      const m = document.querySelector('input[name="mode"]:checked');
+      return m && m.value === 'nl';
+    }
     function buildDownloadUrl() {
       const duration = document.querySelector('select[name="duration_min"]').value;
       const focus = document.querySelector('select[name="focus"]').value;
-      const vary = document.querySelector('input[name="vary"]').checked ? '1' : '0';
-      return `/download?duration_min=${duration}&focus=${encodeURIComponent(focus)}&vary=${vary}`;
+      if (isNLMode()) {
+        const prefs = document.querySelector('textarea[name="prefs"]').value || '';
+        const params = new URLSearchParams({ duration_min: String(duration), focus, prefs });
+        return `/download_nl?${params.toString()}`;
+      } else {
+        const vary = document.querySelector('input[name="vary"]').checked ? '1' : '0';
+        return `/download?duration_min=${duration}&focus=${encodeURIComponent(focus)}&vary=${vary}`;
+      }
     }
 
     function enableDownload() {
@@ -127,7 +157,7 @@
     const submitBtn = document.getElementById('btn-submit');
     const downloadBtn = document.getElementById('btn-zwo');
 
-    const allowedFocus = new Set(['Endurance','SweetSpot','Threshold','VO2']);
+    const allowedFocus = new Set(['Recovery','Endurance','SweetSpot','Threshold','VO2']);
 
     function setFieldError(el, on) {
       if (!el) return;
@@ -160,19 +190,31 @@
 
       let ok = true;
       if (!Number.isFinite(duration) || duration < 20) {
-        ok = false; messages.push('Dauer muss mindestens 20 Minuten sein');
+        ok = false; messages.push('Duration must be at least 20 minutes');
         setFieldError(durationEl, true);
       } else {
         setFieldError(durationEl, false);
       }
       if (!allowedFocus.has(focus)) {
-        ok = false; messages.push('Ungültiger Fokus ausgewählt');
+        ok = false; messages.push('Invalid focus selected');
         setFieldError(focusEl, true);
       } else {
         setFieldError(focusEl, false);
       }
       return { ok, messages };
     }
+
+    function updateModeUI() {
+      // toggle endpoint
+      form.setAttribute('hx-post', isNLMode() ? '/preview_nl' : '/preview');
+      // toggle fields
+      document.getElementById('row-prefs').classList.toggle('hidden', !isNLMode());
+      document.getElementById('row-vary').classList.toggle('hidden', isNLMode());
+    }
+    updateModeUI();
+    document.getElementById('mode-form').addEventListener('change', () => {
+      updateModeUI();
+    });
 
     form.addEventListener('submit', (e) => {
       const { ok, messages } = validateForm();
@@ -208,7 +250,7 @@
     });
     document.body.addEventListener('htmx:responseError', (e) => {
       if (e.detail.elt === form) {
-        showErrors(['Serverfehler beim Generieren des Workouts']);
+        showErrors(['Server error while generating the workout']);
         submitBtn.removeAttribute('disabled');
         submitBtn.classList.remove('opacity-50','cursor-not-allowed');
       }
@@ -227,6 +269,15 @@
       const H = Hmax + 38;  // + Achse
       const GAP = 2;      // Abstand zwischen Balken
       const RX = 5;       // Rundung der Ecken (mehr Rundung)
+
+      // Dynamische Obergrenze: etwas über dem höchsten Intervall
+      let maxPct = 0;
+      for (const s of data.steps) {
+        const a = s.pct ?? s.pct_ftp ?? 0.6;
+        const b = (s.pct_end ?? s.pct_ftp_end ?? a);
+        maxPct = Math.max(maxPct, a, b);
+      }
+      const SCALE_TOP = Math.min(3.0, Math.max(1.05, Math.ceil((maxPct + 0.05) * 20) / 20));
 
       // 1) Steps aufteilen in: normale Bars und Ramps (als Polygone)
       const barSteps = [];
@@ -260,23 +311,15 @@
         </defs>
       `);
 
-      // horizontale Zonenbänder + Linien (50/70/88/95/105/120/140%)
-      const thresholds = [0.55,0.75,0.90,1.05,1.20,1.50];
+      // horizontale Zonenbänder (ohne Y-Achsen-Ticks)
       const bands = ZONES.map(z => ({ to: z.max, color: z.color }));
       let yPrev = Hmax;
       for (const b of bands) {
-        const h = Hmin + (Hmax - Hmin) * Math.min(b.to, 1.5) / 1.5;
+        const cap = Number.isFinite(b.to) ? b.to : SCALE_TOP;
+        const h = Hmin + (Hmax - Hmin) * Math.min(cap, SCALE_TOP) / SCALE_TOP;
         const y = Hmax - h;
         svg.push(`<rect x="${PAD_L}" y="${y}" width="${W - PAD_L - PAD_R}" height="${Math.max(0, yPrev - y)}" fill="${b.color}" opacity="0.05"/>`);
         yPrev = y;
-      }
-      for (const thr of thresholds) {
-        const h = Hmin + (Hmax - Hmin) * Math.min(thr, 1.5) / 1.5;
-        const y = Hmax - h;
-        svg.push(`<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="#e5e7eb" stroke-dasharray="4 4" stroke-width="1"/>`);
-        // y-axis labels on the left
-        const label = `${Math.round(thr*100)}%`;
-        svg.push(`<text x="${PAD_L - 6}" y="${y+3}" font-size="10" fill="#64748b" text-anchor="end">${label}</text>`);
       }
       // Zeitlinien alle 5 Minuten
       const totalMin = Math.max(1, Math.round(total/60));
@@ -309,8 +352,8 @@
           // Ramp polygon
           const p0 = clamp(a, 0.5, 3.0);
           const p1 = clamp(b, 0.5, 3.0);
-          const h0 = Hmin + (Hmax - Hmin) * Math.min(p0, 1.5) / 1.5;
-          const h1 = Hmin + (Hmax - Hmin) * Math.min(p1, 1.5) / 1.5;
+          const h0 = Hmin + (Hmax - Hmin) * Math.min(p0, SCALE_TOP) / SCALE_TOP;
+          const h1 = Hmin + (Hmax - Hmin) * Math.min(p1, SCALE_TOP) / SCALE_TOP;
           const y0 = Hmax - h0;
           const y1 = Hmax - h1;
           const x0 = x + GAP/2;
@@ -325,7 +368,7 @@
         } else {
           // Normal bar
           const p = clamp(a, 0.5, 3.0);
-          const h = Hmin + (Hmax - Hmin) * Math.min(p, 1.5) / 1.5;
+          const h = Hmin + (Hmax - Hmin) * Math.min(p, SCALE_TOP) / SCALE_TOP;
           const y = Hmax - h;
           const color = zoneColor(p);
           const title = `${zoneLabel(p)} ${fmtPct(p)} · ${fmtMinSec(dur)}${note?(' · '+note):''}`;
@@ -350,13 +393,13 @@
 
       // 4) DOM schreiben
       const chartHtml = svg.join('');
-      const summaryHtml = `Name: <b>${data.name}</b> · IF <b>${data.if}</b> · TSS <b>${data.tss}</b> · Dauer <b>${fmtMinSec(total)}</b>`;
+      const summaryHtml = `Name: <b>${data.name}</b> · IF <b>${data.if}</b> · TSS <b>${data.tss}</b> · Duration <b>${fmtMinSec(total)}</b>`;
       const legendHtml = `
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
           ${ZONES.map(z => `
             <div class="flex items-center gap-2">
               <span class="w-3 h-3 inline-block rounded" style="background:${z.color}"></span>
-              ${z.label} ${(z.min*100).toFixed(0)}–${(z.max*100).toFixed(0)}%
+              ${z.label} ${(z.min*100).toFixed(0)}–${Number.isFinite(z.max)?(z.max*100).toFixed(0)+'%':'+'}
             </div>
           `).join('')}
         </div>`;
@@ -365,6 +408,7 @@
         <div class="space-y-3">
           <div id="chart" class="group relative">${chartHtml}<div id="tooltip" class="hidden absolute -translate-x-1/2 -translate-y-full px-2 py-1 bg-slate-900 text-white text-xs rounded shadow">Tooltip</div></div>
           <div id="summary" class="text-slate-700">${summaryHtml}</div>
+          ${data.description ? `<div id="desc" class="text-slate-700"><b>Description:</b> ${data.description}</div>` : ''}
           <div id="legend" class="mt-2">${legendHtml}</div>
         </div>`;
 

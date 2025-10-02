@@ -8,7 +8,7 @@ def test_total_duration_snap():
 
 
 def test_focus_names():
-    for f in ["Endurance","SweetSpot","Threshold","VO2"]:
+    for f in ["Recovery","Endurance","SweetSpot","Threshold","VO2"]:
         w = build_time_box_workout(45, f)
         assert w.focus == f
         assert len(w.steps) > 0
