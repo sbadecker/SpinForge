@@ -42,11 +42,15 @@ def _preview_json_to_workout(s: str) -> Workout:
     obj = json.loads(s)
     steps = []
     for x in obj.get("steps", []):
+        # Handle pct_end/pct_ftp_end properly
+        pct_end_val = x.get("pct_end") if x.get("pct_end") is not None else x.get("pct_ftp_end")
+        pct_ftp_end = float(pct_end_val) if pct_end_val is not None else None
+        
         steps.append(Step(
             duration_s=int(x.get("d") or x.get("duration_s") or 0),
             pct_ftp=float(x.get("pct") or x.get("pct_ftp") or 0.6),
             kind=x.get("kind") or "steady",
-            pct_ftp_end=(float(x.get("pct_end") or x.get("pct_ftp_end")) if (x.get("pct_end") is not None or x.get("pct_ftp_end") is not None) else None),
+            pct_ftp_end=pct_ftp_end,
             note=x.get("note")
         ))
     return Workout(name=obj.get("name") or "Workout", focus=obj.get("focus") or "Endurance", steps=steps, description=obj.get("description"))
