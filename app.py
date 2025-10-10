@@ -12,6 +12,7 @@ app = Flask(__name__)
 # nl_parser = NLParser(open_ai_key)
 nl_parser = NLParser()
 
+
 @app.get("/")
 def index():
     return render_template("index.html")
