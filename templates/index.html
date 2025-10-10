@@ -23,11 +23,11 @@
     }
     
     .wf-bar {
-      transition: opacity 0.2s ease, transform 0.2s ease;
+      transition: opacity 0.2s ease;
     }
     
     .wf-bar:hover {
-      transform: scale(1.02);
+      opacity: 0.8;
     }
     
     .chart-fade-in {
@@ -192,66 +192,6 @@
     function enableDownload() {
       // Download link now only appears in chat messages
     }
-
-    // -----------------------
-    // Form Validation (Client)
-    // -----------------------
-    const form = document.querySelector('form');
-    const errorsEl = document.getElementById('form-errors');
-    const submitBtn = document.getElementById('btn-send');
-
-    const allowedFocus = new Set(['Recovery','Endurance','SweetSpot','Threshold','VO2']);
-
-    function setFieldError(el, on) {
-      if (!el) return;
-      if (on) {
-        el.classList.add('border-red-500','ring-1','ring-red-300');
-      } else {
-        el.classList.remove('border-red-500','ring-1','ring-red-300');
-      }
-    }
-
-    function showErrors(messages) {
-      if (!messages || !messages.length) { clearErrors(); return; }
-      errorsEl.textContent = messages.join(' · ');
-      errorsEl.classList.remove('hidden');
-    }
-
-    function clearErrors() {
-      errorsEl.textContent = '';
-      errorsEl.classList.add('hidden');
-      setFieldError(form.querySelector('select[name="duration_min"]'), false);
-      setFieldError(form.querySelector('select[name="focus"]'), false);
-    }
-
-    function validateForm() {
-      const messages = [];
-      const durationEl = form.querySelector('select[name="duration_min"]');
-      const focusEl = form.querySelector('select[name="focus"]');
-      const duration = parseInt(durationEl?.value || '0', 10);
-      const focus = (focusEl?.value || '').trim();
-
-      let ok = true;
-      if (!Number.isFinite(duration) || duration < 20) {
-        ok = false; messages.push('Duration must be at least 20 minutes');
-        setFieldError(durationEl, true);
-      } else {
-        setFieldError(durationEl, false);
-      }
-      if (!allowedFocus.has(focus)) {
-        ok = false; messages.push('Invalid focus selected');
-        setFieldError(focusEl, true);
-      } else {
-        setFieldError(focusEl, false);
-      }
-      return { ok, messages };
-    }
-
-    function updateModeUI() {
-      // Always in NL mode now - no need to toggle
-      // All UI elements are always visible
-    }
-    updateModeUI();
 
     // Form validation is now handled in the chat composer
 
@@ -421,7 +361,7 @@
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 inline-block rounded-full" style="background:${z.color}"></span>
                 <span class="text-slate-600">${z.label}</span>
-                <span class="text-slate-500">${(z.min*100).toFixed(0)}–${Number.isFinite(z.max)?(z.max*100).toFixed(0)+'%':'+'}%</span>
+                <span class="text-slate-500 whitespace-nowrap">${(z.min*100).toFixed(0)}–${Number.isFinite(z.max)?(z.max*100).toFixed(0):'+'}%</span>
               </div>
             `).join('')}
           </div>
