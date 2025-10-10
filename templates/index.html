@@ -33,7 +33,7 @@
       <label class="block">
         <span class="text-sm">Duration (min)</span>
         <select name="duration_min" class="px-3 py-2 border rounded" required>
-          <option>30</option><option selected>45</option><option>60</option><option>75</option><option>90</option>
+          <option>30</option><option selected>45</option><option>60</option><option>75</option><option>90</option><option>105</option><option>120</option><option>135</option><option>150</option><option>165</option><option>180</option><option>195</option><option>210</option><option>225</option><option>240</option>
         </select>
       </label>
 
@@ -62,7 +62,7 @@
     </form>
 
     <!-- Actions (Download etc.) -->
-    <div class="mt-4 flex gap-3">
+    <div class="mt-4 flex gap-3" id="actions-row">
       <a id="btn-zwo" href="#" class="px-3 py-2 bg-slate-900 text-white rounded pointer-events-none opacity-50">Download .zwo</a>
       <button id="btn-regenerate" class="px-3 py-2 border rounded hidden">Regenerate</button>
     </div>
@@ -70,6 +70,26 @@
     <!-- Preview -->
     <div id="preview" class="mt-6 text-sm text-slate-800">
       <div class="text-slate-500">No workout generated yet.</div>
+    </div>
+
+    <!-- Conversation (NL mode) -->
+    <div id="chat" class="mt-6 space-y-4 hidden" aria-live="polite" aria-relevant="additions"></div>
+
+    <!-- Composer (NL mode) -->
+    <div id="composer-wrap" class="mt-4 border rounded bg-white p-3 sticky bottom-0 hidden">
+      <div class="flex flex-wrap gap-2 mb-2">
+        <select name="duration_min" class="px-3 py-2 border rounded">
+          <option>30</option><option selected>45</option><option>60</option><option>75</option><option>90</option>
+        </select>
+        <select name="focus" class="px-3 py-2 border rounded">
+          <option>Recovery</option><option>Endurance</option><option>SweetSpot</option><option>Threshold</option><option selected>VO2</option>
+        </select>
+      </div>
+      <div class="flex items-start gap-2">
+        <textarea id="composer" rows="2" class="flex-1 px-3 py-2 border rounded" placeholder="Tell your coach what you want… e.g., Add two short sprints near the end"></textarea>
+        <button id="btn-send" class="px-4 py-2 bg-blue-600 text-white rounded">Send to coach</button>
+      </div>
+      <div id="composer-error" class="text-sm text-red-600 mt-2 hidden"></div>
     </div>
   </div>
 
@@ -131,6 +151,11 @@
       const duration = document.querySelector('select[name="duration_min"]').value;
       const focus = document.querySelector('select[name="focus"]').value;
       if (isNLMode()) {
+        // if we already have a refined/generated workout in memory, download exactly that
+        if (window.lastWorkout) {
+          const base_raw = encodeURIComponent(JSON.stringify(window.lastWorkout));
+          return `/download_nl?base_raw=${base_raw}`;
+        }
         const prefs = document.querySelector('textarea[name="prefs"]').value || '';
         const params = new URLSearchParams({ duration_min: String(duration), focus, prefs });
         return `/download_nl?${params.toString()}`;
@@ -145,8 +170,12 @@
       a.href = buildDownloadUrl();
       a.classList.remove('opacity-50','pointer-events-none');
       const reg = document.getElementById('btn-regenerate');
-      reg.classList.remove('hidden');
-      reg.onclick = () => document.getElementById('wf').dispatchEvent(new Event('submit',{cancelable:true}));
+      if (!isNLMode()) {
+        reg.classList.remove('hidden');
+        reg.onclick = () => document.getElementById('wf').dispatchEvent(new Event('submit',{cancelable:true}));
+      } else {
+        reg.classList.add('hidden');
+      }
     }
 
     // -----------------------
@@ -208,8 +237,15 @@
       // toggle endpoint
       form.setAttribute('hx-post', isNLMode() ? '/preview_nl' : '/preview');
       // toggle fields
-      document.getElementById('row-prefs').classList.toggle('hidden', !isNLMode());
+      // In chat (NL) mode, hide the old free-text preferences field
+      document.getElementById('row-prefs').classList.toggle('hidden', isNLMode());
       document.getElementById('row-vary').classList.toggle('hidden', isNLMode());
+      // chat vs preview
+      document.getElementById('chat').classList.toggle('hidden', !isNLMode());
+      document.getElementById('composer-wrap').classList.toggle('hidden', !isNLMode());
+      document.getElementById('preview').classList.toggle('hidden', isNLMode());
+      document.getElementById('btn-submit').classList.toggle('hidden', isNLMode());
+      document.getElementById('actions-row').classList.toggle('hidden', false);
     }
     updateModeUI();
     document.getElementById('mode-form').addEventListener('change', () => {
@@ -470,9 +506,111 @@
       if (!data) return;
       drawWorkoutChart(data);
       enableDownload();
+      if (!isNLMode()) {
+        window.lastWorkout = null;
+      }
     });
 
     // beim Laden: Download-Button deaktiviert lassen, bis ein Workout gerendert wurde
+  </script>
+  <script>
+    // -----------------------
+    // Conversational NL flow (single composer)
+    // -----------------------
+    function addUserMsg(text) {
+      const m = document.createElement('div');
+      m.className = 'flex justify-end';
+      m.innerHTML = `<div class="max-w-[80%] bg-blue-600 text-white rounded-2xl px-3 py-2">${text}</div>`;
+      document.getElementById('chat').appendChild(m);
+      m.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+
+    function addCoachMsg(html) {
+      const m = document.createElement('div');
+      m.className = 'flex justify-start';
+      m.innerHTML = `<div class="max-w-[80%] bg-white rounded-2xl px-3 py-2 ring-1 ring-slate-200">${html}</div>`;
+      document.getElementById('chat').appendChild(m);
+      m.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+
+    function showChartMessage(data) {
+      // remove any previous chart message
+      document.querySelectorAll('.chart-message').forEach(el => el.remove());
+
+      // First render using existing renderer into hidden preview, then move pieces
+      drawWorkoutChart(data);
+      const prev = document.getElementById('preview');
+      const chart = prev.querySelector('#chart');
+      const summary = prev.querySelector('#summary');
+      const desc = prev.querySelector('#desc');
+      const legend = prev.querySelector('#legend');
+
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-message flex justify-start';
+      const card = document.createElement('div');
+      card.className = 'max-w-[80%] bg-white rounded-2xl px-3 py-3 ring-1 ring-slate-200';
+      const header = `
+        <div class="flex items-center justify-between mb-2">
+          <div class="font-medium">${data.name}</div>
+          <a class="px-2 py-1 bg-slate-900 text-white rounded text-sm" href="${buildDownloadUrl()}">Download .zwo</a>
+        </div>
+      `;
+      card.innerHTML = header;
+      const body = document.createElement('div');
+      body.className = 'space-y-2';
+      if (chart) body.appendChild(chart);
+      if (summary) body.appendChild(summary);
+      if (desc) body.appendChild(desc);
+      if (legend) body.appendChild(legend);
+      card.appendChild(body);
+      wrap.appendChild(card);
+      document.getElementById('chat').appendChild(wrap);
+      // clear preview to avoid duplicates
+      prev.innerHTML = '';
+      wrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+
+    const sendBtn = document.getElementById('btn-send');
+    if (sendBtn) {
+      sendBtn.addEventListener('click', async () => {
+        const text = (document.getElementById('composer').value || '').trim();
+        const duration = document.querySelector('select[name="duration_min"]').value;
+        const focus = document.querySelector('select[name="focus"]').value;
+        if (!text && !window.lastWorkout) return; // need initial prompt
+
+        document.getElementById('composer-error').classList.add('hidden');
+        if (text) addUserMsg(text);
+
+        let url, body;
+        if (window.lastWorkout) {
+          url = '/preview_nl_refine';
+          body = new FormData();
+          body.set('duration_min', String(duration));
+          body.set('focus', focus);
+          body.set('changes', text);
+          body.set('base_raw', JSON.stringify(window.lastWorkout));
+        } else {
+          url = '/preview_nl';
+          body = new FormData();
+          body.set('duration_min', String(duration));
+          body.set('focus', focus);
+          body.set('prefs', text);
+        }
+
+        const resp = await fetch(url, { method: 'POST', body });
+        if (!resp.ok) {
+          document.getElementById('composer-error').textContent = 'Coach had trouble generating a workout. Please try again.';
+          document.getElementById('composer-error').classList.remove('hidden');
+          return;
+        }
+        const data = await resp.json();
+        window.lastWorkout = data;
+        addCoachMsg('<div class="text-sm text-slate-700 mb-2">Here’s a session based on your request.</div>');
+        showChartMessage(data);
+        enableDownload();
+        document.getElementById('composer').value = '';
+      });
+    }
   </script>
 </body>
 </html>

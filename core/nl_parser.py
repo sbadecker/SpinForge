@@ -32,7 +32,7 @@ Rules:
 - Add a brief, helpful note to each step explaining intent and motivation.
 
 Focus-specific guidance:
-- Recovery: Easy aerobic spin at ≤0.60 FTP, mostly steady 0.50–0.60; no hard efforts; include gentle cadence focus in notes if useful.
+- Recovery: Easy aerobic spin at ≤0.60 FTP, mostly steady 0.50–0.60; no hard efforts; include gentle cadence focus in notes if useful. If the user has provided preferences, make sure to meet them.
 - Endurance: Mostly continuous Z2 (≈0.60–0.75 FTP). Optional brief steady Z3 touches only if specified; no surges.
 - SweetSpot: 2–5 blocks of 8–15 min at ≈0.88–0.94 FTP with 3–5 min Z1–Z2 recoveries.
 - Threshold: 2–3 blocks of 10–20 min at ≈0.95–1.02 FTP with recoveries ≈25–50% of work duration in 0.55–0.65 FTP.
@@ -60,11 +60,6 @@ def _json_only(s: str) -> Dict[str, Any]:
     return json.loads(s)
 
 class NLParser:
-    # def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5-mini"):
-    #     self.llm = ChatOpenAI(model=model, temperature=1, api_key=api_key)
-    # def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-5-20250929"):
-    #     self.llm = ChatAnthropic(model=model, temperature=1, api_key=api_key)
-    #     self.prompt = ChatPromptTemplate.from_messages([("system", SYSTEM), ("user", USER)])
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
         self.llm = ChatVertexAI(model=model, temperature=1)
         self.prompt = ChatPromptTemplate.from_messages([("system", SYSTEM), ("user", USER)])
@@ -90,3 +85,69 @@ class NLParser:
             ))
         w = Workout(name=j.get("name", f"{focus} {duration_min}m"), focus=j.get("focus", focus), steps=steps, description=j.get("description"))
         return sanitize_workout(w)
+
+    # ----------------------
+    # Refinement (based on prior workout + change requests)
+    # ----------------------
+    def refine(self, previous: Workout, changes: str) -> Workout:
+        """Refine an existing workout according to user-provided change requests.
+
+        The model should keep the structure stable unless changes require otherwise.
+        """
+        REFINE_RULES = """
+When refining an existing workout, follow these rules in addition to the general rules:
+- Keep overall structure and intent unless the changes explicitly require adjustments.
+- Total time ≈ prior workout total (±60s). Keep warmup/cooldown with ramps; no ramps in the main work unless specifically requested.
+- Only change what the user requested; otherwise preserve step notes, intensities and block counts where reasonable.
+- Return a complete workout JSON (not a diff).
+"""
+
+        REFINE_USER = """Prior workout JSON:\n{prev}\n\nChange requests:\n{changes}"""
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", SYSTEM + "\n" + REFINE_RULES),
+            ("user", REFINE_USER),
+        ])
+
+        prev_json = self._workout_to_json(previous)
+        msg = prompt.format_messages(prev=prev_json, changes=changes or "—")
+        raw = self.llm.invoke(msg)
+        print(raw.content)
+        try:
+            j = _json_only(raw.content)
+        except Exception:
+            raw = self.llm.invoke(msg)
+            j = _json_only(raw.content)
+
+        steps: list[Step] = []
+        for s in j.get("steps", []):
+            steps.append(Step(
+                duration_s=int(s["duration_s"]),
+                pct_ftp=float(s["pct_ftp"]),
+                kind=s.get("kind","steady"),
+                pct_ftp_end=(float(s["pct_ftp_end"]) if "pct_ftp_end" in s and s["pct_ftp_end"] is not None else None),
+                note=s.get("note")
+            ))
+        name = j.get("name", previous.name)
+        focus = j.get("focus", previous.focus)
+        desc = j.get("description", previous.description)
+        w = Workout(name=name, focus=focus, steps=steps, description=desc)
+        return sanitize_workout(w)
+
+    def _workout_to_json(self, w: Workout) -> str:
+        obj: Dict[str, Any] = {
+            "name": w.name,
+            "focus": w.focus,
+            "description": w.description,
+            "steps": [
+                {
+                    "duration_s": s.duration_s,
+                    "pct_ftp": s.pct_ftp,
+                    "kind": s.kind,
+                    "pct_ftp_end": s.pct_ftp_end,
+                    "note": s.note,
+                }
+                for s in w.steps
+            ],
+        }
+        return json.dumps(obj)
