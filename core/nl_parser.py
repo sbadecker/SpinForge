@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from typing import Any, Dict, Optional
 import json
 from langchain_openai import ChatOpenAI
@@ -44,8 +45,8 @@ USER = """Parameters:
 
 from langchain_google_vertexai import ChatVertexAI
 
-REGION="us-central1"
-PROJECT_ID="support-robot-448808"
+REGION=os.environ["REGION"]
+PROJECT_ID=os.environ["PROJECT_ID"]
 from google.cloud import aiplatform
 aiplatform.init(project=PROJECT_ID, location=REGION)
 
