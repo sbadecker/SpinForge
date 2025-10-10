@@ -2,9 +2,9 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import json
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from .model import Workout, Step
-from .generator import build_time_box_workout
 from .validator import sanitize_workout
 
 SYSTEM = """You generate Zwift workouts as JSON:
@@ -43,6 +43,13 @@ USER = """Parameters:
 - Focus: {focus}
 - Preferences: {prefs}"""
 
+from langchain_google_vertexai import ChatVertexAI
+
+REGION="us-central1"
+PROJECT_ID="support-robot-448808"
+from google.cloud import aiplatform
+aiplatform.init(project=PROJECT_ID, location=REGION)
+
 def _json_only(s: str) -> Dict[str, Any]:
     s = s.strip()
     if s.startswith("```"):
@@ -53,8 +60,13 @@ def _json_only(s: str) -> Dict[str, Any]:
     return json.loads(s)
 
 class NLParser:
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5-mini"):
-        self.llm = ChatOpenAI(model=model, temperature=1, api_key=api_key)
+    # def __init__(self, api_key: Optional[str] = None, model: str = "gpt-5-mini"):
+    #     self.llm = ChatOpenAI(model=model, temperature=1, api_key=api_key)
+    # def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-5-20250929"):
+    #     self.llm = ChatAnthropic(model=model, temperature=1, api_key=api_key)
+    #     self.prompt = ChatPromptTemplate.from_messages([("system", SYSTEM), ("user", USER)])
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
+        self.llm = ChatVertexAI(model=model, temperature=1)
         self.prompt = ChatPromptTemplate.from_messages([("system", SYSTEM), ("user", USER)])
 
     def generate(self, duration_min:int, focus:str, prefs:str="") -> Workout:

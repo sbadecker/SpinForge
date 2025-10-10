@@ -6,8 +6,10 @@ from core.nl_parser import NLParser
 from core.export_zwo import export_zwo
 
 app = Flask(__name__)
-open_ai_key = os.getenv("OPENAI_API_KEY")
-nl_parser = NLParser(open_ai_key)
+# open_ai_key = os.getenv("OPENAI_API_KEY")
+# nl_parser = NLParser(open_ai_key)
+anthropic_ai_key = os.getenv("ANTHROPIC_API_KEY")
+nl_parser = NLParser(anthropic_ai_key)
 
 @app.get("/")
 def index():
