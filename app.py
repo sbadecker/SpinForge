@@ -77,7 +77,7 @@ def preview_nl_refine():
         prev = _preview_json_to_workout(base_raw)
     except Exception:
         return jsonify({"error": "invalid base_raw"}), 400
-    w = nl_parser.refine(prev, changes)
+    w = nl_parser.refine(prev, changes, duration, focus)
     IF, TSS = compute_if_tss(w)
     return jsonify(_workout_to_preview_json(w, IF, TSS))
 

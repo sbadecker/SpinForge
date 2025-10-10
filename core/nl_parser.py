@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 import json
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage
 from .model import Workout, Step
 from .validator import sanitize_workout
 
@@ -89,34 +90,48 @@ class NLParser:
     # ----------------------
     # Refinement (based on prior workout + change requests)
     # ----------------------
-    def refine(self, previous: Workout, changes: str) -> Workout:
+    def refine(self, previous: Workout, changes: str, duration_min: int, focus: str) -> Workout:
         """Refine an existing workout according to user-provided change requests.
 
         The model should keep the structure stable unless changes require otherwise.
         """
-        REFINE_RULES = """
-When refining an existing workout, follow these rules in addition to the general rules:
-- Keep overall structure and intent unless the changes explicitly require adjustments.
-- Total time ≈ prior workout total (±60s). Keep warmup/cooldown with ramps; no ramps in the main work unless specifically requested.
-- Only change what the user requested; otherwise preserve step notes, intensities and block counts where reasonable.
-- Return a complete workout JSON (not a diff).
+        # Stateless implementation with simplified system prompt
+        REFINE_SYSTEM = """You generate Zwift workouts as JSON:
+{{
+ "name": "string",
+ "focus": "Recovery|Endurance|SweetSpot|Threshold|VO2",
+ "description": "string",
+ "steps": [{{"duration_s": int, "pct_ftp": float, "kind":"steady|warmup|cooldown", "pct_ftp_end": float?, "note": str?}}]
+}}
+
+Rules:
+- JSON only, no markdown fences or commentary
+- Duration ≈ {duration_min} min (±60s)
+- Focus: {focus}
+- Include warmup/cooldown with ramps (set pct_ftp_end for ramps)
+- Keep changes minimal unless explicitly requested
+- Preserve step notes and structure where possible
+- Return complete workout JSON (not a diff)
 """
 
-        REFINE_USER = """Prior workout JSON:\n{prev}\n\nChange requests:\n{changes}"""
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", SYSTEM + "\n" + REFINE_RULES),
-            ("user", REFINE_USER),
-        ])
-
         prev_json = self._workout_to_json(previous)
-        msg = prompt.format_messages(prev=prev_json, changes=changes or "—")
-        raw = self.llm.invoke(msg)
+        user_message = f"""Current workout:
+
+{prev_json}
+
+Please modify it according to these changes: {changes or "—"}"""
+
+        messages = [
+            SystemMessage(content=REFINE_SYSTEM.format(duration_min=duration_min, focus=focus)),
+            HumanMessage(content=user_message)
+        ]
+        
+        raw = self.llm.invoke(messages)
         print(raw.content)
         try:
             j = _json_only(raw.content)
         except Exception:
-            raw = self.llm.invoke(msg)
+            raw = self.llm.invoke(messages)
             j = _json_only(raw.content)
 
         steps: list[Step] = []
