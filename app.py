@@ -10,8 +10,7 @@ import json
 app = Flask(__name__)
 # open_ai_key = os.getenv("OPENAI_API_KEY")
 # nl_parser = NLParser(open_ai_key)
-anthropic_ai_key = os.getenv("ANTHROPIC_API_KEY")
-nl_parser = NLParser(anthropic_ai_key)
+nl_parser = NLParser()
 
 @app.get("/")
 def index():

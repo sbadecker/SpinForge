@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import json
 from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from .model import Workout, Step
 from .validator import sanitize_workout
