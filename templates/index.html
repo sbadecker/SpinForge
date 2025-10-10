@@ -14,22 +14,11 @@
 
     <!-- Form -->
     <form class="flex flex-wrap gap-3 items-end"
-          hx-post="/preview" hx-trigger="submit"
+          hx-post="/preview_nl" hx-trigger="submit"
           hx-target="#preview" hx-swap="none" id="wf" novalidate>
       <div id="form-errors" class="w-full text-red-600 text-sm hidden"></div>
 
-      <!-- Mode toggle -->
-      <fieldset id="mode-form" class="flex items-center gap-2 w-full">
-        <span class="text-sm text-slate-600 mr-2">Mode</span>
-        <label class="inline-flex items-center gap-1 text-sm">
-          <input type="radio" name="mode" value="form" class="w-4 h-4">
-          Structured
-        </label>
-        <label class="inline-flex items-center gap-1 text-sm">
-          <input type="radio" name="mode" value="nl" class="w-4 h-4" checked>
-          Natural language
-        </label>
-      </fieldset>
+      
       <label class="block">
         <span class="text-sm">Duration (min)</span>
         <select name="duration_min" class="px-3 py-2 border rounded" required>
@@ -61,12 +50,6 @@
       <button id="btn-submit" class="px-4 py-2 bg-blue-600 text-white rounded">Generate workout</button>
     </form>
 
-    <!-- Actions (Download etc.) -->
-    <div class="mt-4 flex gap-3" id="actions-row">
-      <a id="btn-zwo" href="#" class="px-3 py-2 bg-slate-900 text-white rounded pointer-events-none opacity-50">Download .zwo</a>
-      <button id="btn-regenerate" class="px-3 py-2 border rounded hidden">Regenerate</button>
-    </div>
-
     <!-- Preview -->
     <div id="preview" class="mt-6 text-sm text-slate-800">
       <div class="text-slate-500">No workout generated yet.</div>
@@ -77,14 +60,6 @@
 
     <!-- Composer (NL mode) -->
     <div id="composer-wrap" class="mt-4 border rounded bg-white p-3 sticky bottom-0 hidden">
-      <div class="flex flex-wrap gap-2 mb-2">
-        <select name="duration_min" class="px-3 py-2 border rounded">
-          <option>30</option><option selected>45</option><option>60</option><option>75</option><option>90</option>
-        </select>
-        <select name="focus" class="px-3 py-2 border rounded">
-          <option>Recovery</option><option>Endurance</option><option>SweetSpot</option><option>Threshold</option><option selected>VO2</option>
-        </select>
-      </div>
       <div class="flex items-start gap-2">
         <textarea id="composer" rows="2" class="flex-1 px-3 py-2 border rounded" placeholder="Tell your coach what you want… e.g., Add two short sprints near the end"></textarea>
         <button id="btn-send" class="px-4 py-2 bg-blue-600 text-white rounded">Send to coach</button>
@@ -143,10 +118,7 @@
     }
 
     // Download-URL nur für ZWO (Zwift-only)
-    function isNLMode() {
-      const m = document.querySelector('input[name="mode"]:checked');
-      return m && m.value === 'nl';
-    }
+    function isNLMode() { return true; }
     function buildDownloadUrl() {
       const duration = document.querySelector('select[name="duration_min"]').value;
       const focus = document.querySelector('select[name="focus"]').value;
@@ -166,16 +138,7 @@
     }
 
     function enableDownload() {
-      const a = document.getElementById('btn-zwo');
-      a.href = buildDownloadUrl();
-      a.classList.remove('opacity-50','pointer-events-none');
-      const reg = document.getElementById('btn-regenerate');
-      if (!isNLMode()) {
-        reg.classList.remove('hidden');
-        reg.onclick = () => document.getElementById('wf').dispatchEvent(new Event('submit',{cancelable:true}));
-      } else {
-        reg.classList.add('hidden');
-      }
+      // Download link now only appears in chat messages
     }
 
     // -----------------------
@@ -184,7 +147,6 @@
     const form = document.getElementById('wf');
     const errorsEl = document.getElementById('form-errors');
     const submitBtn = document.getElementById('btn-submit');
-    const downloadBtn = document.getElementById('btn-zwo');
 
     const allowedFocus = new Set(['Recovery','Endurance','SweetSpot','Threshold','VO2']);
 
@@ -245,20 +207,14 @@
       document.getElementById('composer-wrap').classList.toggle('hidden', !isNLMode());
       document.getElementById('preview').classList.toggle('hidden', isNLMode());
       document.getElementById('btn-submit').classList.toggle('hidden', isNLMode());
-      document.getElementById('actions-row').classList.toggle('hidden', false);
     }
     updateModeUI();
-    document.getElementById('mode-form').addEventListener('change', () => {
-      updateModeUI();
-    });
 
     form.addEventListener('submit', (e) => {
       const { ok, messages } = validateForm();
       if (!ok) {
         e.preventDefault();
         showErrors(messages);
-        // keep download disabled until valid render
-        downloadBtn.classList.add('opacity-50','pointer-events-none');
       } else {
         clearErrors();
       }
